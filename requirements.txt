@@ -1,10 +1,9 @@
-# Master Rule Book: Core Tools for Data, AI, and Dashboard
 streamlit
 pandas
+pandas-ta
 numpy
-yfinance
 prophet
-scikit-learn
 requests
-loguru
 vaderSentiment
+yfinance
+loguru
