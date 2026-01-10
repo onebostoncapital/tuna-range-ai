@@ -1,16 +1,10 @@
-# Master Rule Book: Centralized Constants & Settings
-PAIR_NAME = "SoldUSDC"
-# We use SOL-USD as the primary trend indicator for the Solana ecosystem
-YAHOO_TICKER = "SOL-USD" 
+# Master Rule Book: Clarified Assets
+ASSET_NAME = "SoldUSDC"
+TARGET_PEG = 1.0
 
-# API Endpoints
-COINGECKO_BASE = "https://api.coingecko.com/api/v3"
-DEXPAPRIKA_BASE = "https://api.dexpaprika.com"
+# Market Proxy (Used only for trend/volatility direction)
+MARKET_PROXY_TICKER = "solana" 
 
-# Strategy Multipliers
+# Strategy Constants
 ATR_MULTIPLIER = 2.0
-LP_RANGE_MULTIPLIER = 1.2
-
-# Risk Thresholds
-MAX_NEWS_RISK = 0.7
-ANOMALY_SENSITIVITY = 2.5
+RISK_FREE_ZONE = 0.05 # 5% buffer
