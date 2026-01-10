@@ -1,11 +1,5 @@
-streamlit
+requests
 pandas
 pandas-ta
-numpy
-prophet
-requests
-vaderSentiment
-yfinance
-loguru
 plotly
-statsmodels
+streamlit
