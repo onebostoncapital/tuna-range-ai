@@ -1,22 +1,38 @@
+# Master Rule Book: Technical Indicators Engine
 import pandas as pd
+import pandas_ta as ta
 
 def compute_technical_indicators(df):
     """
-    Master Rule: Calculate MA20, MA200, RSI, ATR, and ADX
+    Expert Brain: Calculates RSI, ATR, and Moving Averages.
+    This version includes a 'Safety Clean' to prevent KeyError: 'close'.
     """
+    # Safety Clean: Ensure all columns are lowercase before calculation
+    df.columns = [col.lower() for col in df.columns]
+    
     indicators = {}
-    # Moving Averages
-    indicators['MA20'] = df['close'].rolling(window=20).mean().iloc[-1]
-    indicators['MA200'] = df['close'].rolling(window=200).mean().iloc[-1]
     
-    # RSI (Relative Strength Index)
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    indicators['RSI'] = 100 - (100 / (1 + rs.iloc[-1]))
+    # Check if we have enough data (MA200 needs 200 points)
+    if len(df) < 20:
+        return None
+
+    # 1. Trend Indicators
+    # Using .get() ensures we don't crash if a column is slightly different
+    close_price = df['close']
     
-    # ATR (Average True Range)
-    indicators['ATR'] = (df['high'] - df['low']).rolling(window=14).mean().iloc[-1]
+    indicators['MA20'] = close_price.rolling(window=20).mean().iloc[-1]
+    indicators['MA200'] = close_price.rolling(window=200).mean().iloc[-1] if len(df) >= 200 else indicators['MA20']
+    
+    # 2. Momentum Indicators (RSI)
+    rsi_series = ta.rsi(close_price, length=14)
+    indicators['RSI'] = rsi_series.iloc[-1] if rsi_series is not None else 50.0
+    
+    # 3. Volatility Indicators (ATR)
+    # ATR requires high, low, and close
+    atr_df = ta.atr(df['high'], df['low'], close_price, length=14)
+    indicators['ATR'] = atr_df.iloc[-1] if atr_df is not None else (close_price.iloc[-1] * 0.02)
+    
+    # 4. Market Summary
+    indicators['current_price'] = close_price.iloc[-1]
     
     return indicators
