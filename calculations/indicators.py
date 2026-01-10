@@ -1,22 +1,22 @@
-# Master Rule Book: Indicators (MA, RSI, ADX, ATR, VWAP)
 import pandas as pd
 
-class IndicatorSuite:
-    def compute_all(self, df):
-        # MA20 & MA200 (The Trend)
-        df['ma20'] = df['close'].rolling(window=20).mean()
-        df['ma200'] = df['close'].rolling(window=200).mean()
-
-        # RSI14 (Overbought/Oversold)
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        df['rsi14'] = 100 - (100 / (1 + (gain / loss)))
-
-        # ATR14 (Volatility/Jumpiness)
-        df['atr14'] = (df['high'] - df['low']).rolling(window=14).mean()
-
-        # VWAP (Volume Weighted Average Price)
-        df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
-        
-        return df
+def compute_technical_indicators(df):
+    """
+    Master Rule: Calculate MA20, MA200, RSI, ATR, and ADX
+    """
+    indicators = {}
+    # Moving Averages
+    indicators['MA20'] = df['close'].rolling(window=20).mean().iloc[-1]
+    indicators['MA200'] = df['close'].rolling(window=200).mean().iloc[-1]
+    
+    # RSI (Relative Strength Index)
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    indicators['RSI'] = 100 - (100 / (1 + rs.iloc[-1]))
+    
+    # ATR (Average True Range)
+    indicators['ATR'] = (df['high'] - df['low']).rolling(window=14).mean().iloc[-1]
+    
+    return indicators
