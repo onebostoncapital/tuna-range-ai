@@ -1,4 +1,3 @@
-# Master Rule Book: Live AI Dashboard
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -6,46 +5,42 @@ from apis.price_data import get_live_market_data, get_soldusdc_price
 from calculations.indicators import compute_technical_indicators
 from calculations.liquidity_floor import calculate_floor
 from ai_modules.nlp_sentiment import get_news_risk
-from ai_modules.ml_forecast import PriceForecaster
 
-# --- Setup ---
-st.set_page_config(page_title="SoldUSDC AI Engine", layout="wide")
-st.title("🤖 SoldUSDC Live Decision Engine")
+st.set_page_config(page_title="SoldUSDC AI Dashboard", layout="wide")
+st.title("🛡️ SoldUSDC AI Risk Engine")
 
-# --- 1. Get REAL Data ---
-with st.spinner('Connecting to Solana Market Data...'):
-    df = get_live_market_data()
+# --- DATA RELOAD ---
+df = get_live_market_data()
+
+if df is not None and not df.empty:
     price = get_soldusdc_price()
-    news_risk = get_news_risk()
-
-if df is not None:
-    # --- 2. Run AI Brains ---
     indicators = compute_technical_indicators(df)
-    forecaster = PriceForecaster()
-    prediction = forecaster.predict(df)
-    floor = calculate_floor(price, indicators, news_risk)
+    news_risk = get_news_risk()
+    
+    if indicators:
+        floor = calculate_floor(price, indicators, news_risk)
+        
+        # 1. Metrics Header
+        c1, c2, c3 = st.columns(3)
+        c1.metric("SOL Price (Proxy)", f"${price}")
+        c2.metric("Safety Floor", f"${floor}")
+        c3.metric("News Risk Score", f"{int(news_risk*100)}%")
+        
+        # 2. Strategy Recommendation
+        st.subheader("Final AI Decision")
+        if news_risk > 0.6:
+            st.error("🚨 HIGH RISK: News sentiment is crashing. Stay in USDC.")
+        elif price < floor:
+            st.warning("⚠️ FLOOR BREACH: Price is below safety floor. Adjust LP range.")
+        else:
+            st.success("✅ OPTIMAL: Provide Liquidity. High probability of range-bound behavior.")
 
-    # --- 3. Top Row Metrics ---
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Live Price", f"${price}")
-    m2.metric("Safety Floor", f"${floor}")
-    m3.metric("AI Bias", prediction['directional_bias'])
-    m4.metric("News Risk", f"{int(news_risk * 100)}%")
-
-    # --- 4. Real Price Chart ---
-    st.subheader("Market Analysis & Safety Floor")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="Price", line=dict(color='gold')))
-    fig.add_trace(go.Scatter(x=df['ds'], y=[floor]*len(df), name="Liquidity Floor", line=dict(dash='dash', color='red')))
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- 5. Final Recommendation ---
-    st.divider()
-    if news_risk > 0.6:
-        st.error(f"🛑 STRATEGY: WAIT. News risk ({news_risk}) is too high for safe LP.")
-    elif price < floor:
-        st.warning("⚠️ STRATEGY: ADJUST. Price is touching the safety floor.")
+        # 3. Chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="Price (SOL)"))
+        fig.add_trace(go.Scatter(x=df['ds'], y=[floor]*len(df), name="Risk Floor", line=dict(color='red', dash='dash')))
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.success(f"✅ STRATEGY: PROVIDE LP. Target Range: ${floor} - ${round(price * 1.05, 4)}")
+        st.error("Calculating indicators... Not enough history yet.")
 else:
-    st.error("Could not connect to live data. Please check your internet or API limits.")
+    st.error("Connecting to Market Data... If this persists, Yahoo is rate-limiting the IP.")
