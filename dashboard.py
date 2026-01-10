@@ -5,48 +5,61 @@ from apis.price_data import get_live_market_data
 from calculations.indicators import compute_technical_indicators
 from calculations.liquidity_floor import get_strategy_details
 
-# Configuration
+# --- USER PARAMETERS ---
 PRINCIPAL = 10000
 LEVERAGE = 2
-MARKET_PRICE = 136.39
+SOL_PRICE_2026 = 136.39  # Fixed Jan 10 price point
 
-st.set_page_config(page_title="DeFiTuna AI Agent", layout="wide")
+st.set_page_config(page_title="DeFiTuna Agent", layout="wide")
 
-# Load CSS & Data
+# Load Data & Brains
 df = get_live_market_data()
 indicators = compute_technical_indicators(df)
-strategy = get_strategy_details(MARKET_PRICE, indicators, PRINCIPAL, LEVERAGE)
+strategy = get_strategy_details(SOL_PRICE_2026, indicators, PRINCIPAL, LEVERAGE)
 
 # --- UI HEADER ---
-st.title("🛡️ DeFiTuna | Automated Liquidity Agent")
-st.markdown(f"**Principal:** ${PRINCIPAL:,} | **Leverage:** {LEVERAGE}x | **Bias:** `{strategy['bias']}`")
+st.title("🛡️ DeFiTuna | AI Liquidity Orchestrator")
+st.markdown(f"**Principal:** ${PRINCIPAL:,} | **Leverage:** {LEVERAGE}x | **Market Bias:** `{strategy['bias']}`")
 
-# --- TOP ROW: MASTER RULES ---
+# --- MASTER METRICS ---
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("SOL Market Price", f"${MARKET_PRICE}")
-c2.metric("Auto-Forecast Range", f"${strategy['low']} - ${strategy['high']}")
-c3.metric("Liquidation Floor", f"${strategy['liquidation']}", f"{strategy['health_factor']}% Buffer")
-c4.metric("Active Leverage", f"{LEVERAGE}x")
+c1.metric("Current Price", f"${SOL_PRICE_2026}")
+c2.metric("Auto-Range Forecast", f"${strategy['low']} - ${strategy['high']}")
+c3.metric("Liquidation Floor", f"${strategy['liquidation']}", f"{strategy['safety_buffer']}% Buffer")
+c4.metric("Total LP Exposure", f"${strategy['total_exposure']:,}")
 
-# --- CHARTING ---
+# --- ANALYSIS CHART (FIXED SYNTAX) ---
 fig = go.Figure()
 
-# Market Price
-fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="SOL Trend", line=dict(color='#00ffa3', width=2)))
+# Price Trend Line
+fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="Market Trend", line=dict(color='#00ffa3', width=2)))
 
-# Liquidation Floor Area (Red Zone)
+# Liquidation Floor (Fixed Red Line)
 fig.add_trace(go.Scatter(
     x=df['ds'], y=[strategy['liquidation']]*len(df),
-    name="LIQUIDATION FLOOR", line=dict(color='red', width=4, dash='dot')
+    name="LIQUIDATION DANGER", line=dict(color='red', width=3, dash='dot')
 ))
 
-# Forecast Range Area (Glow Zone)
-x_area = df['ds'].tolist() + df['ds'].tolist()[::-1]
-y_area = [strategy['high']]*len(df) + [strategy['low']]*len(df)[::-1]
-fig.add_trace(go.Scatter(x=x_area, y=y_area, fill='toself', fillcolor='rgba(0, 255, 163, 0.05)', line=dict(color='rgba(0,0,0,0)'), name="Target LP Range"))
+# Forecast Range Glow (Fixed Area Logic)
+x_vals = df['ds'].tolist()
+y_upper = [strategy['high']] * len(df)
+y_lower = [strategy['low']] * len(df)
 
-fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0,r=0,t=0,b=0))
+fig.add_trace(go.Scatter(
+    x=x_vals + x_vals[::-1],
+    y=y_upper + y_lower[::-1],
+    fill='toself',
+    fillcolor='rgba(0, 255, 163, 0.05)',
+    line=dict(color='rgba(0,0,0,0)'),
+    name="Target LP Range",
+    hoverinfo='skip'
+))
+
+fig.update_layout(template="plotly_dark", height=550, margin=dict(l=0, r=0, t=10, b=0))
 st.plotly_chart(fig, use_container_width=True)
 
-# --- RULE BOOK FOOTER ---
-st.warning(f"🚨 **Liquidation Alert:** If SOL hits the **${strategy['liquidation']}** floor, your **${PRINCIPAL:,}** margin will be lost. Current safety buffer is **{strategy['health_factor']}%**.")
+# --- ACTION SUMMARY ---
+if strategy['bias'] == "BULLISH":
+    st.success(f"📈 **Bullish Bias Detected:** The AI suggests an asymmetrical range to capture upside. Suggested Range: **{strategy['low']} to {strategy['high']}**.")
+else:
+    st.warning(f"📉 **Bearish Bias Detected:** The AI suggests a protective range. Safety Floor at **${strategy['liquidation']}** is critical.")
