@@ -1,0 +1,33 @@
+/* Professional Trading Theme */
+[data-testid="stAppViewContainer"] {
+    background-color: #0e1117; /* Dark background like DEXscreener */
+}
+
+/* Designing the Metric "Cards" */
+[data-testid="stMetric"] {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s ease;
+}
+
+[data-testid="stMetric"]:hover {
+    transform: translateY(-5px); /* Lift effect when you hover */
+    border-color: #00ffa3;
+}
+
+/* Color for Price Numbers */
+[data-testid="stMetricValue"] {
+    color: #00ffa3 !important; /* Neon Green */
+    font-family: 'monospace';
+    font-weight: bold;
+}
+
+/* Cleaning up the Main Header */
+h1 {
+    color: white;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -1px;
+}
