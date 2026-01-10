@@ -7,3 +7,5 @@ requests
 vaderSentiment
 yfinance
 loguru
+plotly
+statsmodels
