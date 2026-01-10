@@ -1,63 +1,51 @@
-# Master Rule Book: Streamlit Dashboard
-# This is the face of our AI-powered decision engine.
+# Master Rule Book: Live AI Dashboard
 import streamlit as st
 import pandas as pd
-import numpy as np
-import config
-from apis.price_data import get_soldusdc_price
+import plotly.graph_objects as go
+from apis.price_data import get_live_market_data, get_soldusdc_price
 from calculations.indicators import compute_technical_indicators
 from calculations.liquidity_floor import calculate_floor
 from ai_modules.nlp_sentiment import get_news_risk
+from ai_modules.ml_forecast import PriceForecaster
 
-# --- Page Setup ---
-st.set_page_config(page_title="TunaRange AI", layout="wide")
-st.title("🐟 SoldUSDC Decision Engine")
-st.write(f"Analyzing liquidity exclusively for **DeFiTuna**")
+# --- Setup ---
+st.set_page_config(page_title="SoldUSDC AI Engine", layout="wide")
+st.title("🤖 SoldUSDC Live Decision Engine")
 
-# --- 1. Data Collection ---
-# Get current price and news risk
-price = get_soldusdc_price()
-news_risk = get_news_risk()
+# --- 1. Get REAL Data ---
+with st.spinner('Connecting to Solana Market Data...'):
+    df = get_live_market_data()
+    price = get_soldusdc_price()
+    news_risk = get_news_risk()
 
-# Create dummy data for math demonstration (MA20/MA200)
-# In the next version, we will pull real history from APIs.
-data = {
-    'close': np.random.normal(1.0, 0.005, 300).cumsum() + 10,
-    'high': np.random.normal(1.005, 0.005, 300).cumsum() + 10,
-    'low': np.random.normal(0.995, 0.005, 300).cumsum() + 10,
-}
-df = pd.DataFrame(data)
+if df is not None:
+    # --- 2. Run AI Brains ---
+    indicators = compute_technical_indicators(df)
+    forecaster = PriceForecaster()
+    prediction = forecaster.predict(df)
+    floor = calculate_floor(price, indicators, news_risk)
 
-# --- 2. Brain Work ---
-indicators = compute_technical_indicators(df)
-floor = calculate_floor(price, indicators, news_risk)
+    # --- 3. Top Row Metrics ---
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Live Price", f"${price}")
+    m2.metric("Safety Floor", f"${floor}")
+    m3.metric("AI Bias", prediction['directional_bias'])
+    m4.metric("News Risk", f"{int(news_risk * 100)}%")
 
-# --- 3. Display Results ---
-col1, col2, col3 = st.columns(3)
+    # --- 4. Real Price Chart ---
+    st.subheader("Market Analysis & Safety Floor")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="Price", line=dict(color='gold')))
+    fig.add_trace(go.Scatter(x=df['ds'], y=[floor]*len(df), name="Liquidity Floor", line=dict(dash='dash', color='red')))
+    st.plotly_chart(fig, use_container_width=True)
 
-with col1:
-    st.metric("SoldUSDC Price", f"${price}")
-    st.write(f"Source: Multi-API Fallback")
-
-with col2:
-    st.metric("Liquidity Floor", f"${floor}")
-    st.write("Safety Shield: Active")
-
-with col3:
-    risk_level = "Safe" if news_risk < 0.4 else "Moderate" if news_risk < 0.7 else "High"
-    st.metric("News Risk Factor", f"{news_risk}", delta=risk_level, delta_color="inverse")
-
-st.divider()
-
-# Final Recommendation as per Master Rule Book
-st.header("🎯 Final LP Strategy")
-if news_risk > 0.75:
-    st.error("ACTION: **WAIT** (Risk too high for safe liquidity)")
-elif price < floor:
-    st.warning("ACTION: **ADJUST RANGE** (Price below safety floor)")
+    # --- 5. Final Recommendation ---
+    st.divider()
+    if news_risk > 0.6:
+        st.error(f"🛑 STRATEGY: WAIT. News risk ({news_risk}) is too high for safe LP.")
+    elif price < floor:
+        st.warning("⚠️ STRATEGY: ADJUST. Price is touching the safety floor.")
+    else:
+        st.success(f"✅ STRATEGY: PROVIDE LP. Target Range: ${floor} - ${round(price * 1.05, 4)}")
 else:
-    st.success("ACTION: **LP PROVIDE** (Conditions optimal for DeFiTuna)")
-
-# Show some math for the curious
-with st.expander("See Technical Indicators"):
-    st.write(indicators)
+    st.error("Could not connect to live data. Please check your internet or API limits.")
