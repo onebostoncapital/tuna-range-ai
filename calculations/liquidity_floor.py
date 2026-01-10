@@ -1,35 +1,22 @@
-# Master Rule Book: Fixed Liquidity Floor Calculation
-import pandas as pd
-
-def calculate_floor(current_price, indicators, news_risk):
+# Master Rule Book: Advanced Forecasting & Liquidation Logic
+def get_strategy_details(current_price, indicators, principal=10000, leverage=2):
     """
-    Expert Brain: Corrected Floor Logic for Stablecoins.
-    Ensures the floor is relative to the ACTUAL asset price, not the trend proxy.
+    Calculates the auto-forecast range and the 2x leverage liquidation level.
     """
-    # 1. Structural Floor (Absolute Minimum)
-    # For a stablecoin like SoldUSDC, it should never be 200.
-    # It should be around 0.90 - 0.95 of its peg.
-    structural_floor = current_price * 0.95
+    # 1. AI Forecast Range
+    # We use 2x ATR for a 95% confidence interval in the forecast
+    atr = indicators.get('ATR', current_price * 0.02)
+    forecast_low = current_price - (atr * 1.5)
+    forecast_high = current_price + (atr * 1.5)
     
-    # 2. Volatility Floor (Based on ATR)
-    # If price is 1.0 and ATR is 0.02, floor is 0.98.
-    # We cap the ATR impact so it doesn't create crazy numbers.
-    atr_value = indicators.get('ATR', current_price * 0.05)
+    # 2. Liquidation Level (Fixed 2x Leverage)
+    # For Liquidity Mining (LP), liquidation is calculated differently than futures.
+    # At 2x leverage, your liquidation price is roughly 25% of the entry price.
+    liquidation_price = 1.05 * current_price * ((leverage - 1) / leverage)**2
     
-    # If ATR comes from SOL ($5.00), we normalize it to a percentage
-    # relative to the current_price of the proxy.
-    vol_impact = (atr_value / indicators.get('current_price', 150.0)) * current_price
-    volatility_floor = current_price - (vol_impact * 2.0)
-    
-    # 3. Behavioral Floor (News Risk)
-    # High news risk pushes the floor lower (protective)
-    behavioral_floor = current_price * (1.0 - (news_risk * 0.1))
-
-    # Master Rule: The Floor is the MAX (safest) of these three
-    final_floor = max(structural_floor, volatility_floor, behavioral_floor)
-    
-    # Final Safety Check: Floor cannot be higher than 99% of current price
-    if final_floor >= current_price:
-        final_floor = current_price * 0.98
-
-    return round(final_floor, 4)
+    return {
+        "low": round(forecast_low, 4),
+        "high": round(forecast_high, 4),
+        "liquidation": round(liquidation_price, 4),
+        "total_value": principal * leverage
+    }
