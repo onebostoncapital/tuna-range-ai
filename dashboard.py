@@ -1,72 +1,53 @@
 import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime
-from apis.price_data import get_live_market_data, get_soldusdc_price
+from apis.price_data import get_live_market_data
 from calculations.indicators import compute_technical_indicators
-from calculations.liquidity_floor import calculate_floor
+from calculations.liquidity_floor import get_strategy_details
 
-# 1. Page Config for Wide Mode
-st.set_page_config(page_title="SoldUSDC AI Dashboard", layout="wide", initial_sidebar_state="collapsed")
+# Configuration
+PRINCIPAL = 10000
+LEVERAGE = 2
+MARKET_PRICE = 136.39 # Live Jan 10, 2026 Price
 
-# 2. Inject Custom CSS
-def local_css(file_name):
-    with open(file_name) as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+st.set_page_config(page_title="DeFiTuna AI", layout="wide")
 
-try:
-    local_css("style.css")
-except:
-    pass # Falls back to default if file missing
-
-# 3. Load Real 2026 Data
+# Load Data
 df = get_live_market_data()
-# Force Sync to Jan 10, 2026 Market Price
-market_price = 136.39 
-usdc_price = 1.0
-
 indicators = compute_technical_indicators(df)
-floor = calculate_floor(usdc_price, indicators, 0.1)
+strategy = get_strategy_details(MARKET_PRICE, indicators, PRINCIPAL, LEVERAGE)
 
-# --- UI LAYOUT ---
-st.title("🐟 DEFI TUNA | SoldUSDC Risk Engine")
-st.caption(f"Last Updated: {datetime.now().strftime('%H:%M:%S')} UTC")
+# --- UI HEADER ---
+st.title("🐟 DeFiTuna | AI Liquidity Agent")
+st.markdown(f"**Strategy:** SoldUSDC/SOL Loop | **Capital:** ${PRINCIPAL:,} | **Leverage:** {LEVERAGE}x")
 
-# Row 1: Key Metrics
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("SOL/USD", f"${market_price}", "+2.4%")
-col2.metric("SoldUSDC Floor", f"${floor}", "🛡️ Safe")
-col3.metric("RSI (14)", f"{int(indicators.get('RSI', 50))}")
-col4.metric("Risk Level", "LOW", delta_color="inverse")
+# --- TOP ROW: STRATEGY METRICS ---
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("SOL Market Price", f"${MARKET_PRICE}")
+c2.metric("Forecast Range", f"${strategy['low']} - ${strategy['high']}")
+c3.metric("Liquidation Level", f"${strategy['liquidation']}", delta="-75%", delta_color="inverse")
+c4.metric("Total LP Exposure", f"${strategy['total_value']:,}")
 
-# Row 2: Main Trading Chart
-st.subheader("Market Trend Analysis")
+# --- MAIN CHART WITH FORECAST SHADING ---
 fig = go.Figure()
 
-# Candle/Line Trace
+# Price Line
+fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="SOL Trend", line=dict(color='#00ffa3')))
+
+# Forecast Range (Shaded Area)
 fig.add_trace(go.Scatter(
-    x=df['ds'], y=df['y'], 
-    name="SOL Price", 
-    line=dict(color='#00ffa3', width=2),
-    fill='toself', fillcolor='rgba(0, 255, 163, 0.1)'
+    x=df['ds'].tolist() + df['ds'].tolist()[::-1],
+    y=[strategy['high']]*len(df) + [strategy['low']]*len(df)[::-1],
+    fill='toself', fillcolor='rgba(0, 255, 163, 0.1)',
+    line=dict(color='rgba(255,255,255,0)'), name="AI Forecast Range"
 ))
 
-# Safety Floor Trace (Visual Scale)
-visual_floor = (floor / usdc_price) * market_price
-fig.add_trace(go.Scatter(
-    x=df['ds'], y=[visual_floor]*len(df), 
-    name="Liquidity Floor", 
-    line=dict(color='#ff4b4b', dash='dash')
-))
+# Liquidation Line (Red)
+fig.add_trace(go.Scatter(x=df['ds'], y=[strategy['liquidation']]*len(df), 
+                         name="LIQUIDATION LEVEL", line=dict(color='red', width=3, dash='dot')))
 
-fig.update_layout(
-    template="plotly_dark",
-    margin=dict(l=20, r=20, t=20, b=20),
-    height=500,
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(0,0,0,0)'
-)
+fig.update_layout(template="plotly_dark", height=600, margin=dict(l=0, r=0, t=20, b=0))
 st.plotly_chart(fig, use_container_width=True)
 
-# Row 3: Recommendations
-with st.expander("📊 View AI Calculation Details"):
-    st.write(f"The floor is calculated using a base price of **${usdc_price}** adjusted by a volatility factor (ATR) of **{round(indicators.get('ATR', 0), 4)}**.")
+# --- ACTION PANEL ---
+st.success(f"✅ **AI Recommendation:** Set your LP Range between **${strategy['low']}** and **${strategy['high']}**. Your liquidation safety buffer is **${round(MARKET_PRICE - strategy['liquidation'], 2)}**.")
