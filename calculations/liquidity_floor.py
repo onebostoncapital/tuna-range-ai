@@ -1,22 +1,36 @@
-# Master Rule Book: Advanced Forecasting & Liquidation Logic
+# Master Rule Book: DeFiTuna Auto-Forecasting Engine
 def get_strategy_details(current_price, indicators, principal=10000, leverage=2):
-    """
-    Calculates the auto-forecast range and the 2x leverage liquidation level.
-    """
-    # 1. AI Forecast Range
-    # We use 2x ATR for a 95% confidence interval in the forecast
-    atr = indicators.get('ATR', current_price * 0.02)
-    forecast_low = current_price - (atr * 1.5)
-    forecast_high = current_price + (atr * 1.5)
+    # 1. Determine Directional Bias
+    # Bullish if RSI > 50 and Price > MA20
+    rsi = indicators.get('RSI', 50)
+    ma20 = indicators.get('MA20', current_price)
     
-    # 2. Liquidation Level (Fixed 2x Leverage)
-    # For Liquidity Mining (LP), liquidation is calculated differently than futures.
-    # At 2x leverage, your liquidation price is roughly 25% of the entry price.
-    liquidation_price = 1.05 * current_price * ((leverage - 1) / leverage)**2
+    is_bullish = rsi > 50 and current_price >= ma20
+    bias = "BULLISH" if is_bullish else "BEARISH"
+    
+    # 2. Auto-Forecast Range (Dynamic Based on Bias)
+    atr = indicators.get('ATR', current_price * 0.03)
+    
+    if is_bullish:
+        # Bullish: Shift range slightly higher to capture upside fees
+        low_offset, high_offset = 1.0, 2.5
+    else:
+        # Bearish: Shift range lower to protect against price drops
+        low_offset, high_offset = 2.5, 1.0
+        
+    forecast_low = current_price - (atr * low_offset)
+    forecast_high = current_price + (atr * high_offset)
+    
+    # 3. Liquidation Floor (Fixed 2x Leveraged LP Math)
+    # On DeFiTuna, 2x leverage liquidation is mathematically reached 
+    # when the price drops by ~73.5% (approx 0.264 of entry)
+    liquidation_floor = current_price * 0.264
     
     return {
-        "low": round(forecast_low, 4),
-        "high": round(forecast_high, 4),
-        "liquidation": round(liquidation_price, 4),
-        "total_value": principal * leverage
+        "bias": bias,
+        "low": round(forecast_low, 2),
+        "high": round(forecast_high, 2),
+        "liquidation": round(liquidation_floor, 2),
+        "total_value": principal * leverage,
+        "health_factor": round((current_price - liquidation_floor) / current_price * 100, 1)
     }
