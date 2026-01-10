@@ -5,35 +5,34 @@ import config
 
 def get_live_market_data():
     """
-    Fetches real historical and live data from Yahoo Finance.
-    Provides Open, High, Low, Close, and Volume.
+    Fetches 60 days of hourly data. 
+    Hourly data is better for SoldUSDC range fine-tuning.
     """
     try:
-        # Fetch last 60 days of hourly data to ensure indicators have enough points
+        # We fetch 60 days to ensure MA200 has enough points
         ticker = yf.Ticker(config.YAHOO_TICKER)
         df = ticker.history(period="60d", interval="1h")
         
         if df.empty:
             return None
             
-        # Clean the data for our Math Brain
+        # Standardize columns to lowercase immediately
         df = df.reset_index()
         df.columns = [col.lower() for col in df.columns]
         
-        # Rename columns to match our strategy requirements
-        # ds = datestamp, y = price (required by Prophet AI)
-        df = df.rename(columns={'datetime': 'ds', 'close': 'y'})
-        
+        # Prophet AI specifically needs 'ds' and 'y'
+        if 'datetime' in df.columns:
+            df = df.rename(columns={'datetime': 'ds', 'close': 'y'})
+        elif 'date' in df.columns:
+            df = df.rename(columns={'date': 'ds', 'close': 'y'})
+            
         return df
     except Exception as e:
         print(f"Error fetching live data: {e}")
         return None
 
 def get_soldusdc_price():
-    """
-    Gets the most recent single price point.
-    """
     data = get_live_market_data()
     if data is not None:
         return round(data['y'].iloc[-1], 4)
-    return 1.0 # Fallback for stablecoin
+    return 1.0
