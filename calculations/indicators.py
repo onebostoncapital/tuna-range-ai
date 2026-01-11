@@ -1,28 +1,29 @@
 import pandas as pd
 
 def compute_technical_indicators(df):
-    """
-    Calculates RSI, ATR, and MA20 and returns the MOST RECENT values as a dictionary.
-    """
-    # 1. 20-Day Moving Average
-    df['MA20'] = df['y'].rolling(window=20).mean()
+    # Safety: Ensure we have enough rows for a 20-period average
+    if len(df) < 20:
+        return {'RSI': 50, 'MA20': float(df['y'].iloc[-1]), 'ATR': 1.5}
+
+    # Ensure y is numeric
+    df['y'] = pd.to_numeric(df['y'], errors='coerce')
     
-    # 2. RSI (14) - Simple implementation
+    # Calculate MA20
+    df['MA20'] = df['y'].rolling(window=20, min_periods=1).mean()
+    
+    # Calculate RSI
     delta = df['y'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14, min_periods=1).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14, min_periods=1).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    # 3. ATR (Volatility)
-    df['ATR'] = df['high'] - df['low']
-    atr_val = df['ATR'].rolling(window=14).mean()
+    # Calculate ATR
+    df['ATR'] = (df['high'] - df['low']).rolling(window=14, min_periods=1).mean()
 
-    # CRITICAL: Return a dictionary of the LATEST values, not the whole table
-    latest_metrics = {
-        'RSI': float(df['RSI'].iloc[-1]) if not pd.isna(df['RSI'].iloc[-1]) else 50,
-        'MA20': float(df['MA20'].iloc[-1]) if not pd.isna(df['MA20'].iloc[-1]) else float(df['y'].iloc[-1]),
-        'ATR': float(atr_val.iloc[-1]) if not pd.isna(atr_val.iloc[-1]) else float(df['y'].iloc[-1] * 0.02)
+    # Return latest dictionary
+    return {
+        'RSI': float(df['RSI'].iloc[-1]),
+        'MA20': float(df['MA20'].iloc[-1]),
+        'ATR': float(df['ATR'].iloc[-1])
     }
-    
-    return latest_metrics
