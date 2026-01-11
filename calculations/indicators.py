@@ -1,44 +1,28 @@
-# Master Rule Book: Crash-Proof Indicators Engine
 import pandas as pd
-import pandas_ta as ta
 
 def compute_technical_indicators(df):
     """
-    Expert Brain: Calculates RSI, ATR, and Moving Averages.
-    Standardizes all column names to lowercase to prevent KeyError.
+    Calculates RSI, ATR, and MA20 and returns the MOST RECENT values as a dictionary.
     """
-    if df is None or df.empty:
-        return None
-        
-    # FORCE everything to lowercase immediately
-    df.columns = [col.lower() for col in df.columns]
+    # 1. 20-Day Moving Average
+    df['MA20'] = df['y'].rolling(window=20).mean()
     
-    # Check if we have enough data (MA20 needs 20 points)
-    if len(df) < 20:
-        return None
+    # 2. RSI (14) - Simple implementation
+    delta = df['y'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # 3. ATR (Volatility)
+    df['ATR'] = df['high'] - df['low']
+    atr_val = df['ATR'].rolling(window=14).mean()
 
-    indicators = {}
+    # CRITICAL: Return a dictionary of the LATEST values, not the whole table
+    latest_metrics = {
+        'RSI': float(df['RSI'].iloc[-1]) if not pd.isna(df['RSI'].iloc[-1]) else 50,
+        'MA20': float(df['MA20'].iloc[-1]) if not pd.isna(df['MA20'].iloc[-1]) else float(df['y'].iloc[-1]),
+        'ATR': float(atr_val.iloc[-1]) if not pd.isna(atr_val.iloc[-1]) else float(df['y'].iloc[-1] * 0.02)
+    }
     
-    # Standard columns used in DeFi math
-    try:
-        close_price = df['close']
-        
-        # 1. Trend Indicators
-        indicators['MA20'] = close_price.rolling(window=20).mean().iloc[-1]
-        indicators['MA200'] = close_price.rolling(window=200).mean().iloc[-1] if len(df) >= 200 else indicators['MA20']
-        
-        # 2. Momentum (RSI)
-        rsi_series = ta.rsi(close_price, length=14)
-        indicators['RSI'] = rsi_series.iloc[-1] if rsi_series is not None else 50.0
-        
-        # 3. Volatility (ATR)
-        atr_df = ta.atr(df['high'], df['low'], close_price, length=14)
-        indicators['ATR'] = atr_df.iloc[-1] if atr_df is not None else (close_price.iloc[-1] * 0.02)
-        
-        # 4. Market Summary
-        indicators['current_price'] = close_price.iloc[-1]
-        
-        return indicators
-    except Exception as e:
-        print(f"Calculation Error: {e}")
-        return None
+    return latest_metrics
