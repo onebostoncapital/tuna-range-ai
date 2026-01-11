@@ -1,84 +1,71 @@
 import streamlit as st
 import plotly.graph_objects as go
+from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 from apis.price_data import get_live_market_data
 from calculations.indicators import compute_technical_indicators
 from calculations.liquidity_floor import get_strategy_details
 
-# --- 1. SETTINGS & AUTO-REFRESH ---
+# --- SETTINGS ---
 PRINCIPAL = 10000
 LEVERAGE = 2
 
 st.set_page_config(page_title="DeFiTuna AI Agent", layout="wide")
 
-# This forces the browser to refresh the data every 30 seconds
-st_autorefresh(interval=30 * 1000, key="pricerefresh")
+# Trigger refresh every 10 seconds to eliminate lag feel
+count = st_autorefresh(interval=10 * 1000, key="pricerefresh")
 
-# --- 2. DATA ENGINE ---
-# We fetch the data fresh on every rerun (No st.cache allowed)
+# --- DATA ENGINE ---
 df = get_live_market_data()
 indicators = compute_technical_indicators(df)
+current_price = float(df['y'].iloc[-1])
+strategy = get_strategy_details(current_price, indicators, PRINCIPAL, LEVERAGE)
 
-# Pull the absolute latest price from our 2026 data feed
-current_market_price = float(df['y'].iloc[-1]) 
+# --- UI HEADER ---
+c_title, c_status = st.columns([3, 1])
+with c_title:
+    st.title("🛡️ DeFiTuna | AI Strategy Engine")
+with c_status:
+    st.write("") # Padding
+    st.caption(f"🕒 **Last Pulse:** {datetime.now().strftime('%H:%M:%S')}")
+    st.caption(f"🔄 **Refreshes:** {count}")
 
-# Calculate strategy using the Master Rule Book logic
-strategy = get_strategy_details(current_market_price, indicators, PRINCIPAL, LEVERAGE)
+st.markdown(f"**Principal:** ${PRINCIPAL:,} | **Leverage:** {LEVERAGE}x | **Bias:** `{strategy['bias']}`")
 
-# --- 3. UI HEADER ---
-st.title("🛡️ DeFiTuna | AI Strategy Engine")
-st.markdown(f"**Principal:** ${PRINCIPAL:,} | **Leverage:** {LEVERAGE}x | **Live Market Status:** `{strategy['bias']}`")
+# --- MASTER METRICS ---
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("SOL Live (API)", f"${current_price:,.2f}")
+m2.metric("AI Auto-Range", f"${strategy['low']} - ${strategy['high']}")
+# DANGER ZONE: Floor for Bullish, Ceiling for Bearish
+m3.metric("Liquidation Risk", f"${strategy['liquidation']}", f"{strategy['safety_buffer']}% Buffer")
+m4.metric("Market Sentiment", strategy['bias'])
 
-# --- 4. MASTER METRICS ---
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("SOL Price", f"${current_market_price:,.2f}")
-c2.metric("AI Auto-Range", f"${strategy['low']} - ${strategy['high']}")
-# In BEARISH mode, this is the "Ceiling" risk
-c3.metric("Liquidation Floor", f"${strategy['liquidation']}", f"{strategy['safety_buffer']}% Buffer")
-c4.metric("Bias", strategy['bias'])
-
-# --- 5. VISUALIZATION ---
+# --- CHART ---
 fig = go.Figure()
 
-# Price Trend
-fig.add_trace(go.Scatter(
-    x=df['ds'], y=df['y'], 
-    name="SOL Price", 
-    line=dict(color='#00ffa3', width=2)
-))
+# Price Path
+fig.add_trace(go.Scatter(x=df['ds'], y=df['y'], name="Price", line=dict(color='#00ffa3', width=2)))
 
-# Target LP Range Shading
+# Range Shading
 x_area = df['ds'].tolist() + df['ds'].tolist()[::-1]
 y_upper = [strategy['high']] * len(df)
 y_lower = [strategy['low']] * len(df)
-fig.add_trace(go.Scatter(
-    x=x_area, y=y_upper + y_lower[::-1],
-    fill='toself', 
-    fillcolor='rgba(0, 255, 163, 0.08)',
-    line=dict(color='rgba(0,0,0,0)'), 
-    name="AI Forecast Range"
-))
+fig.add_trace(go.Scatter(x=x_area, y=y_upper + y_lower[::-1], fill='toself', 
+                         fillcolor='rgba(0, 255, 163, 0.05)', line=dict(color='rgba(0,0,0,0)'), name="Target LP Range"))
 
-# Liquidation Floor (Danger Line)
-fig.add_trace(go.Scatter(
-    x=df['ds'], y=[strategy['liquidation']] * len(df), 
-    name="LIQUIDATION RISK", 
-    line=dict(color='#ff4b4b', width=3, dash='dot')
-))
+# Risk Line
+fig.add_trace(go.Scatter(x=df['ds'], y=[strategy['liquidation']] * len(df), 
+                         name="LIQUIDATION DANGER", line=dict(color='#ff4b4b', width=3, dash='dot')))
 
-fig.update_layout(
-    template="plotly_dark", 
-    height=550, 
-    margin=dict(l=10, r=10, t=10, b=10),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-)
+fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=0, b=0),
+                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
 
 st.plotly_chart(fig, use_container_width=True)
 
-# --- 6. ACTION SUMMARY ---
+# --- DANGER ALERTS ---
 if strategy['bias'] == "BEARISH":
-    st.error(f"📉 **Bearish Strategy Active:** The Liquidation Floor is set at **${strategy['liquidation']}** (UPWARD risk). If SOL spikes to this level, your 2x leveraged SoldUSDC position will be liquidated.")
+    st.error(f"⚠️ **Bearish Alert:** Risk is on the **HIGHER SIDE**. Liquidation ceiling at **${strategy['liquidation']}**.")
 else:
-    st.success(f"📈 **Bullish Strategy Active:** Liquidation Floor is at **${strategy['liquidation']}** (DOWNWARD risk). Safety buffer is currently {strategy['safety_buffer']}%.")
+    st.success(f"✅ **Bullish Alert:** Risk is on the **LOWER SIDE**. Liquidation floor at **${strategy['liquidation']}**.")
 
-st.info(f"💡 **AI Recommendation:** Set your concentrated liquidity pool range to **{strategy['low']} - {strategy['high']}** to maximize fee collection based on current {strategy['bias']} volatility.")
+st.info(f"💡 **AI Strategy:** Deploy Concentrated Liquidity between **${strategy['low']}** and **${strategy['high']}**.")
