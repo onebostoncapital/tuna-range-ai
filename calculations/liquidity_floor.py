@@ -1,28 +1,28 @@
-import pandas as pd
-
-def compute_technical_indicators(df):
-    """
-    Calculates RSI, ATR, and MA20 and returns the MOST RECENT values as a dictionary.
-    """
-    # 1. 20-Day Moving Average
-    df['MA20'] = df['y'].rolling(window=20).mean()
+# Master Rule Book: Fixed Strategy Logic
+def get_strategy_details(current_price, indicators, principal=10000, leverage=2):
+    # indicators is now a dictionary, so .get() will work!
+    rsi = indicators.get('RSI', 50)
+    ma20 = indicators.get('MA20', current_price)
     
-    # 2. RSI (14) - Simple implementation
-    delta = df['y'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+    # Bias Logic
+    is_bullish = rsi > 50 and current_price >= ma20
+    bias = "BULLISH" if is_bullish else "BEARISH"
     
-    # 3. ATR (Volatility)
-    df['ATR'] = df['high'] - df['low']
-    atr_val = df['ATR'].rolling(window=14).mean()
-
-    # CRITICAL: Return a dictionary of the LATEST values, not the whole table
-    latest_metrics = {
-        'RSI': float(df['RSI'].iloc[-1]) if not pd.isna(df['RSI'].iloc[-1]) else 50,
-        'MA20': float(df['MA20'].iloc[-1]) if not pd.isna(df['MA20'].iloc[-1]) else float(df['y'].iloc[-1]),
-        'ATR': float(atr_val.iloc[-1]) if not pd.isna(atr_val.iloc[-1]) else float(df['y'].iloc[-1] * 0.02)
+    # Range & Liquidation
+    atr = indicators.get('ATR', current_price * 0.03)
+    
+    if bias == "BULLISH":
+        low_bound, high_bound = current_price - (atr * 1.5), current_price + (atr * 3.0)
+        liquidation_floor = current_price * 0.264
+    else:
+        low_bound, high_bound = current_price - (atr * 3.0), current_price + (atr * 1.5)
+        liquidation_floor = current_price * 1.35 # Risk is above
+    
+    return {
+        "bias": bias,
+        "low": round(low_bound, 2),
+        "high": round(high_bound, 2),
+        "liquidation": round(liquidation_floor, 2),
+        "total_exposure": principal * leverage,
+        "safety_buffer": round(abs((current_price - liquidation_floor) / current_price * 100), 1)
     }
-    
-    return latest_metrics
